@@ -576,7 +576,7 @@ local function PerformRejoin()
             task.wait(2)
             
             -- Re-execute the script (paste your loadstring here)
-            loadstring(game:HttpGet("YOUR_SCRIPT_URL_HERE"))()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/SynapseXRemakeOffical/Main/refs/heads/main/Waste_time"))()
         ]])
     end
     
