@@ -1,0 +1,776 @@
+-- Load Obsidian UI Library
+local repo = "https://raw.githubusercontent.com/mstudio45/Obsidian/main/"
+local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
+local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
+local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
+
+-- Wait for library to fully load
+task.wait(0.5)
+
+-- Create Window
+local Window = Library:CreateWindow({
+    Name = "Waste Time Hub",
+    Theme = "Dark",
+    Icon = "rbxassetid://12345678",
+})
+
+-- Create Tabs
+local MainTab = Window:AddTab("Main", "home")
+local UtilityTab = Window:AddTab("Utility", "wrench")
+local StatsTab = Window:AddTab("Stats", "chart-bar")
+local ChangelogTab = Window:AddTab("Changelog", "list")
+local SettingsTab = Window:AddTab("Settings", "settings")
+
+-- Create Sections
+local ClickSection = MainTab:AddLeftGroupbox("Auto Clicker")
+local ZoneSection = MainTab:AddRightGroupbox("Zone Multipliers")
+local PurgatorySection = MainTab:AddLeftGroupbox("Purgatory Teleport")
+local EonSection = MainTab:AddRightGroupbox("Auto Convert Eons")
+
+local AntiSection = UtilityTab:AddLeftGroupbox("Anti Features")
+local RejoinSection = UtilityTab:AddRightGroupbox("Auto Rejoin")
+
+local StatsSection = StatsTab:AddLeftGroupbox("Real-Time Statistics")
+
+local ChangelogSection = ChangelogTab:AddLeftGroupbox("Version History")
+
+-- Initialize Options
+getgenv().Options = getgenv().Options or {}
+
+-- ============================================
+-- CONFIGURATION & STATE
+-- ============================================
+local Config = {
+    AutoClickEnabled = false,
+    ClickDelay = 0.1,
+    AntiAFKEnabled = false,
+    AntiLagEnabled = false,
+    TeleportEnabled = false,
+    TeleportStayDelay = 1,
+    TeleportLoopDelay = 600 -- 10 minutes in seconds
+}
+
+-- ============================================
+-- TASK MANAGER
+-- ============================================
+local TaskManager = {}
+TaskManager.tasks = {}
+
+function TaskManager:Start(name, func)
+    self:Stop(name)
+    self.tasks[name] = task.spawn(func)
+end
+
+function TaskManager:Stop(name)
+    if self.tasks[name] then
+        pcall(function()
+            task.cancel(self.tasks[name])
+        end)
+        self.tasks[name] = nil
+    end
+end
+
+function TaskManager:StopAll()
+    for name in pairs(self.tasks) do
+        self:Stop(name)
+    end
+end
+
+-- ============================================
+-- UTILITY FUNCTIONS
+-- ============================================
+local function GetPlayer()
+    return game.Players.LocalPlayer
+end
+
+local function GetCharacter()
+    local player = GetPlayer()
+    return player and player.Character or nil
+end
+
+local function GetHRP()
+    local char = GetCharacter()
+    return char and char:FindFirstChild("HumanoidRootPart") or nil
+end
+
+local function FireTouch(part)
+    if not part then return end
+    local hrp = GetHRP()
+    if not hrp then return end
+    
+    pcall(function()
+        firetouchinterest(part, hrp, 0)
+        task.wait()
+        firetouchinterest(part, hrp, 1)
+    end)
+end
+
+local function FireClick(detector)
+    if not detector then return end
+    pcall(function()
+        fireclickdetector(detector)
+    end)
+end
+
+-- ============================================
+-- 1. AUTO CLICK DETECTORS
+-- ============================================
+ClickSection:AddLabel("Auto-fire click detectors")
+
+ClickSection:AddToggle("AutoClick", {
+    Text = "Enable Auto Clicker",
+    Default = false,
+    Tooltip = "Automatically fires both click detectors",
+    Callback = function(Value)
+        Config.AutoClickEnabled = Value
+        
+        if Value then
+            TaskManager:Start("AutoClicker", function()
+                while Config.AutoClickEnabled do
+                    pcall(function()
+                        -- Fire The Button
+                        local button1 = workspace:FindFirstChild("Clicks")
+                        if button1 and button1:FindFirstChild("n") then
+                            local clickDet1 = button1.n:FindFirstChild("ClickDetector")
+                            if clickDet1 then
+                                FireClick(clickDet1)
+                            end
+                        end
+                        
+                        -- Fire Other Button
+                        local button2 = workspace:FindFirstChild("other")
+                        if button2 and button2:FindFirstChild("n") then
+                            local clickDet2 = button2.n:FindFirstChild("ClickDetector")
+                            if clickDet2 then
+                                FireClick(clickDet2)
+                            end
+                        end
+                    end)
+                    
+                    task.wait(Config.ClickDelay)
+                end
+            end)
+            Library:Notify("Auto Clicker enabled!")
+        else
+            TaskManager:Stop("AutoClicker")
+            Library:Notify("Auto Clicker disabled!")
+        end
+    end
+})
+
+ClickSection:AddSlider("ClickDelay", {
+    Text = "Click Delay",
+    Default = 0.1,
+    Min = 0.01,
+    Max = 2,
+    Rounding = 2,
+    Compact = false,
+    Suffix = "s",
+    Callback = function(Value)
+        Config.ClickDelay = Value
+    end
+})
+
+ClickSection:AddDivider()
+ClickSection:AddLabel("Fires both buttons automatically")
+
+-- ============================================
+-- 2. ZONE MULTIPLIERS
+-- ============================================
+ZoneSection:AddLabel("Multiplier Zone Control")
+
+local ZoneConfig = {
+    ["The Library (1.5x)"] = {path = "Zone", multiplier = "1.5x"},
+    ["The Future (2x)"] = {path = "ZoneB", multiplier = "2x"},
+    ["The End (5x)"] = {path = "zzone", multiplier = "5x"},
+    ["The Zenith (15x)"] = {path = "znzone", multiplier = "15x"},
+    ["Cyber Zone (30x)"] = {path = "czone", multiplier = "30x"}
+}
+
+local selectedZone = "Cyber Zone (30x)"
+
+ZoneSection:AddDropdown("ZoneSelect", {
+    Values = {
+        "The Library (1.5x)",
+        "The Future (2x)",
+        "The End (5x)",
+        "The Zenith (15x)",
+        "Cyber Zone (30x)"
+    },
+    Default = 5,
+    Multi = false,
+    Text = "Select Zone",
+    Tooltip = "Choose which zone multiplier to use",
+    Callback = function(Value)
+        selectedZone = Value
+    end
+})
+
+ZoneSection:AddDivider()
+
+local zoneActive = false
+
+ZoneSection:AddToggle("ZoneToggle", {
+    Text = "Enable Zone Multiplier",
+    Default = false,
+    Tooltip = "Toggle zone multiplier on/off",
+    Callback = function(Value)
+        zoneActive = Value
+        
+        local hrp = GetHRP()
+        local zoneData = ZoneConfig[selectedZone]
+        
+        if not zoneData then return end
+        
+        local zone = workspace:FindFirstChild(zoneData.path)
+        
+        if hrp and zone then
+            pcall(function()
+                if Value then
+                    -- Enter zone
+                    firetouchinterest(zone, hrp, 0)
+                    Library:Notify(selectedZone .. " activated!")
+                else
+                    -- Exit zone
+                    firetouchinterest(zone, hrp, 1)
+                    Library:Notify(selectedZone .. " deactivated!")
+                end
+            end)
+        else
+            Library:Notify("Zone not found!")
+        end
+    end
+})
+
+ZoneSection:AddDivider()
+ZoneSection:AddLabel("Select zone then toggle on/off")
+
+-- ============================================
+-- 3. PURGATORY TELEPORT
+-- ============================================
+PurgatorySection:AddLabel("Instant Purgatory Teleport")
+
+PurgatorySection:AddButton({
+    Text = "Teleport to Purgatory",
+    Func = function()
+        local hrp = GetHRP()
+        if not hrp then
+            Library:Notify("HumanoidRootPart not found!")
+            return
+        end
+        
+        local purgatory = workspace:FindFirstChild("Purgatory")
+        if purgatory then
+            local purgatoryPart = purgatory:FindFirstChild("A")
+            if purgatoryPart then
+                pcall(function()
+                    firetouchinterest(purgatoryPart, hrp, 0)
+                    task.wait()
+                    firetouchinterest(purgatoryPart, hrp, 1)
+                    Library:Notify("Teleported to Purgatory!")
+                end)
+            else
+                Library:Notify("Purgatory.A not found!")
+            end
+        else
+            Library:Notify("Purgatory not found!")
+        end
+    end,
+    DoubleClick = false,
+    Tooltip = "Instantly teleport to Purgatory"
+})
+
+PurgatorySection:AddDivider()
+PurgatorySection:AddLabel("Skip straight to endgame")
+
+-- ============================================
+-- 4. AUTO CONVERT EONS
+-- ============================================
+EonSection:AddLabel("Convert Time to Eons")
+
+EonSection:AddToggle("EonLoop", {
+    Text = "Enable Auto Convert Loop",
+    Default = false,
+    Tooltip = "Automatically converts time to Eons",
+    Callback = function(Value)
+        Config.TeleportEnabled = Value
+        
+        if Value then
+            TaskManager:Start("EonLoop", function()
+                while Config.TeleportEnabled do
+                    pcall(function()
+                        local hrp = GetHRP()
+                        local timeButtons = workspace:FindFirstChild("TimeButtons")
+                        
+                        if hrp and timeButtons and timeButtons:FindFirstChild("Button") then
+                            local button = timeButtons.Button
+                            local originalCFrame = hrp.CFrame
+                            
+                            -- Teleport to button
+                            hrp.CFrame = button.CFrame + Vector3.new(0, 5, 0)
+                            Library:Notify("Converting to Eons...")
+                            
+                            -- Wait at the button
+                            task.wait(Config.TeleportStayDelay)
+                            
+                            -- Return to original position
+                            if GetHRP() then
+                                GetHRP().CFrame = originalCFrame
+                                Library:Notify("Conversion complete!")
+                            end
+                        end
+                    end)
+                    
+                    -- Wait before next conversion cycle
+                    task.wait(Config.TeleportLoopDelay)
+                end
+            end)
+            Library:Notify("Auto Convert enabled!")
+        else
+            TaskManager:Stop("EonLoop")
+            Library:Notify("Auto Convert disabled!")
+        end
+    end
+})
+
+EonSection:AddSlider("ConvertStayDelay", {
+    Text = "Stay Duration",
+    Default = 1,
+    Min = 0.1,
+    Max = 10,
+    Rounding = 1,
+    Compact = false,
+    Suffix = "s",
+    Callback = function(Value)
+        Config.TeleportStayDelay = Value
+    end
+})
+
+EonSection:AddSlider("ConvertLoopDelay", {
+    Text = "Loop Interval",
+    Default = 600,
+    Min = 60,
+    Max = 3600,
+    Rounding = 0,
+    Compact = false,
+    Suffix = "s",
+    Callback = function(Value)
+        Config.TeleportLoopDelay = Value
+    end
+})
+
+EonSection:AddDivider()
+
+EonSection:AddButton({
+    Text = "Convert Once (Manual)",
+    Func = function()
+        TaskManager:Start("EonOnce", function()
+            pcall(function()
+                local hrp = GetHRP()
+                local timeButtons = workspace:FindFirstChild("TimeButtons")
+                
+                if hrp and timeButtons and timeButtons:FindFirstChild("Button") then
+                    local button = timeButtons.Button
+                    local originalCFrame = hrp.CFrame
+                    
+                    -- Teleport to button
+                    hrp.CFrame = button.CFrame + Vector3.new(0, 5, 0)
+                    Library:Notify("Converting to Eons...")
+                    
+                    -- Wait at the button
+                    task.wait(Config.TeleportStayDelay)
+                    
+                    -- Return to original position
+                    if GetHRP() then
+                        GetHRP().CFrame = originalCFrame
+                        Library:Notify("Conversion complete!")
+                    end
+                else
+                    Library:Notify("Could not find Time Button!")
+                end
+            end)
+        end)
+    end,
+    DoubleClick = false,
+    Tooltip = "Convert once without looping"
+})
+
+EonSection:AddDivider()
+EonSection:AddLabel("Note: 600s = 10 minutes")
+
+-- ============================================
+-- 5. ANTI-AFK & ANTI-LAG
+-- ============================================
+AntiSection:AddLabel("Anti-AFK System")
+
+AntiSection:AddToggle("AntiAFK", {
+    Text = "Enable Anti-AFK",
+    Default = false,
+    Tooltip = "Prevents you from being kicked for inactivity",
+    Callback = function(Value)
+        Config.AntiAFKEnabled = Value
+        
+        if Value then
+            TaskManager:Start("AntiAFK", function()
+                local VirtualUser = game:GetService("VirtualUser")
+                
+                while Config.AntiAFKEnabled do
+                    pcall(function()
+                        VirtualUser:CaptureController()
+                        VirtualUser:ClickButton2(Vector2.new())
+                    end)
+                    
+                    -- Small movement to stay active
+                    local hrp = GetHRP()
+                    if hrp then
+                        hrp.CFrame = hrp.CFrame * CFrame.new(0.001, 0, 0)
+                        task.wait(0.1)
+                        hrp.CFrame = hrp.CFrame * CFrame.new(-0.001, 0, 0)
+                    end
+                    
+                    task.wait(60) -- Every 60 seconds
+                end
+            end)
+            Library:Notify("Anti-AFK enabled!")
+        else
+            TaskManager:Stop("AntiAFK")
+            Library:Notify("Anti-AFK disabled!")
+        end
+    end
+})
+
+AntiSection:AddDivider()
+AntiSection:AddLabel("Anti-Lag System")
+
+AntiSection:AddToggle("AntiLag", {
+    Text = "Enable Anti-Lag",
+    Default = false,
+    Tooltip = "Reduces graphics quality for better performance",
+    Callback = function(Value)
+        Config.AntiLagEnabled = Value
+        
+        pcall(function()
+            local Lighting = game:GetService("Lighting")
+            
+            if Value then
+                -- Store original settings
+                getgenv().OriginalSettings = getgenv().OriginalSettings or {
+                    QualityLevel = settings().Rendering.QualityLevel,
+                    GlobalShadows = Lighting.GlobalShadows,
+                    FogEnd = Lighting.FogEnd
+                }
+                
+                -- Apply low settings
+                settings().Rendering.QualityLevel = 1
+                Lighting.GlobalShadows = false
+                Lighting.FogEnd = 100000
+                
+                -- Remove unnecessary effects
+                for _, v in pairs(Lighting:GetChildren()) do
+                    if v:IsA("BlurEffect") or v:IsA("SunRaysEffect") or v:IsA("BloomEffect") then
+                        v.Enabled = false
+                    end
+                end
+                
+                Library:Notify("Anti-Lag enabled! Graphics reduced.")
+            else
+                -- Restore original settings
+                if getgenv().OriginalSettings then
+                    settings().Rendering.QualityLevel = getgenv().OriginalSettings.QualityLevel or 5
+                    Lighting.GlobalShadows = getgenv().OriginalSettings.GlobalShadows
+                    Lighting.FogEnd = getgenv().OriginalSettings.FogEnd or 100000
+                end
+                
+                -- Re-enable effects
+                for _, v in pairs(Lighting:GetChildren()) do
+                    if v:IsA("BlurEffect") or v:IsA("SunRaysEffect") or v:IsA("BloomEffect") then
+                        v.Enabled = true
+                    end
+                end
+                
+                Library:Notify("Anti-Lag disabled! Graphics restored.")
+            end
+        end)
+    end
+})
+
+AntiSection:AddDivider()
+AntiSection:AddLabel("Note: Anti-Lag reduces visual quality")
+
+-- ============================================
+-- 6. AUTO REJOIN
+-- ============================================
+RejoinSection:AddLabel("Auto Reconnect System")
+
+local autoRejoinEnabled = false
+
+RejoinSection:AddToggle("AutoRejoin", {
+    Text = "Enable Auto Rejoin",
+    Default = false,
+    Tooltip = "Automatically rejoins if disconnected or kicked",
+    Callback = function(Value)
+        autoRejoinEnabled = Value
+        
+        if Value then
+            Library:Notify("Auto Rejoin enabled!")
+        else
+            Library:Notify("Auto Rejoin disabled!")
+        end
+    end
+})
+
+RejoinSection:AddDivider()
+RejoinSection:AddLabel("Rejoins and reloads script automatically")
+
+-- Check if we rejoined and need to restore settings
+local TeleportService = game:GetService("TeleportService")
+local LocalPlayer = game.Players.LocalPlayer
+
+-- Try to restore settings from rejoined session
+if getgenv().WasteTimeRejoinData then
+    task.wait(2)
+    Library:Notify("Auto-rejoined! Restoring settings...")
+    
+    local data = getgenv().WasteTimeRejoinData
+    
+    if data.ZoneActive and data.SelectedZone then
+        task.wait(1)
+        selectedZone = data.SelectedZone
+        
+        -- Re-enable zone
+        local hrp = GetHRP()
+        local zoneData = ZoneConfig[selectedZone]
+        if hrp and zoneData then
+            local zone = workspace:FindFirstChild(zoneData.path)
+            if zone then
+                pcall(function()
+                    firetouchinterest(zone, hrp, 0)
+                    zoneActive = true
+                    Library:Notify("Restored zone: " .. selectedZone)
+                end)
+            end
+        end
+    end
+    
+    -- Clear the data
+    getgenv().WasteTimeRejoinData = nil
+end
+
+-- Auto Rejoin Handler
+local function PerformRejoin()
+    if not autoRejoinEnabled then return end
+    
+    Library:Notify("Rejoining server...")
+    
+    -- Store current settings in global environment
+    getgenv().WasteTimeRejoinData = {
+        ZoneActive = zoneActive,
+        SelectedZone = selectedZone
+    }
+    
+    -- Queue script to run on teleport (for executors that support it)
+    if queue_on_teleport then
+        queue_on_teleport([[
+            -- Wait for game to load
+            repeat task.wait() until game:IsLoaded()
+            task.wait(2)
+            
+            -- Re-execute the script (paste your loadstring here)
+            loadstring(game:HttpGet("YOUR_SCRIPT_URL_HERE"))()
+        ]])
+    end
+    
+    task.wait(1)
+    
+    -- Perform teleport
+    pcall(function()
+        TeleportService:Teleport(game.PlaceId, LocalPlayer)
+    end)
+end
+
+-- Hook into game shutdown/kick events
+game:GetService("CoreGui").DescendantRemoving:Connect(function(descendant)
+    if autoRejoinEnabled then
+        if descendant.Name == "ErrorPrompt" or descendant.Name == "RobloxPromptGui" then
+            PerformRejoin()
+        end
+    end
+end)
+
+-- Detect game closing/errors
+game:GetService("GuiService").ErrorMessageChanged:Connect(function()
+    if autoRejoinEnabled then
+        PerformRejoin()
+    end
+end)
+
+-- Player removing event (kicked/left)
+game.Players.PlayerRemoving:Connect(function(player)
+    if player == LocalPlayer and autoRejoinEnabled then
+        PerformRejoin()
+    end
+end)
+
+-- ============================================
+-- 7. REAL-TIME STATISTICS
+-- ============================================
+StatsSection:AddLabel("Live Game Statistics")
+StatsSection:AddDivider()
+
+local EonsLabel = StatsSection:AddLabel("Eons: Loading...")
+local UniversesLabel = StatsSection:AddLabel("Universes: Loading...")
+
+StatsSection:AddDivider()
+StatsSection:AddLabel("Updates every 0.5 seconds")
+
+-- Stats update loop
+TaskManager:Start("StatsUpdate", function()
+    while true do
+        pcall(function()
+            -- Get Eons
+            local eonsPath = workspace:FindFirstChild("TimeButtons")
+            if eonsPath and eonsPath:FindFirstChild("Button") then
+                local button = eonsPath.Button
+                if button:FindFirstChild("bb") then
+                    local bb = button.bb
+                    if bb:FindFirstChild("Eo") then
+                        local eo = bb.Eo
+                        if eo:FindFirstChild("TextLabel") then
+                            EonsLabel:SetText("Eons: " .. tostring(eo.TextLabel.Text))
+                        end
+                    end
+                end
+            end
+            
+            -- Get Universes
+            local uniPath = workspace:FindFirstChild("Reset")
+            if uniPath and uniPath:FindFirstChild("bb") then
+                local bb = uniPath.bb
+                if bb:FindFirstChild("Eo") then
+                    local eo = bb.Eo
+                    if eo:FindFirstChild("TextLabel") then
+                        UniversesLabel:SetText("Universes: " .. tostring(eo.TextLabel.Text))
+                    end
+                end
+            end
+        end)
+        task.wait(0.5)
+    end
+end)
+
+-- ============================================
+-- 8. CHANGELOG
+-- ============================================
+ChangelogSection:AddLabel("Version 3.0")
+ChangelogSection:AddDivider()
+ChangelogSection:AddLabel("Added:")
+ChangelogSection:AddLabel("- Auto Clicker for buttons")
+ChangelogSection:AddLabel("- Zone Multiplier System (5 zones)")
+ChangelogSection:AddLabel("- Purgatory Instant Teleport")
+ChangelogSection:AddLabel("- Auto Convert to Eons")
+ChangelogSection:AddLabel("- Anti-AFK System")
+ChangelogSection:AddLabel("- Anti-Lag System")
+ChangelogSection:AddLabel("- Auto Rejoin on disconnect")
+ChangelogSection:AddLabel("- Real-Time Statistics")
+ChangelogSection:AddDivider()
+ChangelogSection:AddLabel("Improvements:")
+ChangelogSection:AddLabel("- Task Manager for performance")
+ChangelogSection:AddLabel("- Auto re-enable zones on respawn")
+ChangelogSection:AddLabel("- Proper cleanup on death")
+ChangelogSection:AddLabel("- Extended convert intervals")
+ChangelogSection:AddLabel("- Dropdown zone selection")
+ChangelogSection:AddDivider()
+ChangelogSection:AddLabel("Developer: Lbn")
+ChangelogSection:AddLabel("UI: Obsidian by mstudio45")
+
+-- ============================================
+-- 9. SETTINGS TAB
+-- ============================================
+local MenuGroup = SettingsTab:AddLeftGroupbox("Menu Settings")
+
+-- Theme Manager Integration
+ThemeManager:SetLibrary(Library)
+ThemeManager:SetFolder("WasteTime")
+ThemeManager:ApplyToTab(SettingsTab)
+
+-- Save Manager Integration
+SaveManager:SetLibrary(Library)
+SaveManager:SetFolder("WasteTime/saves")
+SaveManager:BuildConfigSection(SettingsTab)
+SaveManager:LoadAutoloadConfig()
+
+-- UI Settings
+MenuGroup:AddLabel("Toggle UI with RightShift")
+MenuGroup:AddDivider()
+
+MenuGroup:AddButton({
+    Text = "Unload Script",
+    Func = function()
+        TaskManager:StopAll()
+        Library:Notify("Script unloaded!")
+        Library:Unload()
+    end,
+    DoubleClick = true,
+    Tooltip = "Double-click to unload"
+})
+
+-- ============================================
+-- CLEANUP ON DEATH & RESPAWN HANDLER
+-- ============================================
+local function OnCharacterAdded(character)
+    task.wait(1)
+    
+    -- Check if zone toggle was active
+    if zoneActive and selectedZone then
+        task.wait(0.5) -- Extra delay for character to fully load
+        
+        local hrp = character:FindFirstChild("HumanoidRootPart")
+        local zoneData = ZoneConfig[selectedZone]
+        
+        if hrp and zoneData then
+            local zone = workspace:FindFirstChild(zoneData.path)
+            
+            if zone then
+                pcall(function()
+                    firetouchinterest(zone, hrp, 0)
+                    Library:Notify("Re-enabled " .. selectedZone .. " after respawn!")
+                end)
+            end
+        end
+    end
+end
+
+GetPlayer().CharacterAdded:Connect(OnCharacterAdded)
+
+if GetCharacter() then
+    local humanoid = GetCharacter():FindFirstChild("Humanoid")
+    if humanoid then
+        humanoid.Died:Connect(function()
+            -- Pause movement-based tasks
+            TaskManager:Stop("EonLoop")
+            TaskManager:Stop("EonOnce")
+            
+            -- Notify about multiplier loss
+            if zoneActive then
+                Library:Notify("Warning: Multiplier lost on death!")
+            end
+        end)
+    end
+end
+
+-- ============================================
+-- KEYBIND TO TOGGLE UI
+-- ============================================
+local UserInputService = game:GetService("UserInputService")
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed and input.KeyCode == Enum.KeyCode.RightShift then
+        Library:Toggle()
+    end
+end)
+
+-- ============================================
+-- INITIALIZATION
+-- ============================================
+Library:Notify("Script loaded successfully!")
+Library:Notify("Welcome, " .. game.Players.LocalPlayer.Name .. "!")
+Library:Notify("Press RightShift to toggle menu")
