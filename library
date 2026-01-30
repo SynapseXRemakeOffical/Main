@@ -6,43 +6,51 @@ local LocalPlayer = Players.LocalPlayer
 local AUTH_URL = "https://sentinel-auth.onrender.com/verify"
 
 -- 1. GET VARIABLES FROM GETGENV
--- We use a pcall to ensure getgenv exists (standard in most exploits)
 local env = (getgenv and getgenv()) or _G
 local UserKey = env.Key
-local TargetScript = env.Script
+local ScriptName = env.Script -- This is the NAME (e.g., "DaHood")
 
 -- 2. UI Helper
 local function Notify(title, text, duration)
     game.StarterGui:SetCore("SendNotification", {
-        Title = title;
-        Text = text;
+        Title = Sentinel;
+        Text = loading;
         Duration = duration or 5;
     })
 end
 
--- 3. Pre-Auth Validation
+-- 3. Validation
 if not UserKey or UserKey == "" then
-    LocalPlayer:Kick("Sentinel Auth: Missing 'getgenv().Key'. Please use the correct loader.")
+    LocalPlayer:Kick("Sentinel: Missing 'getgenv().Key'.")
     return
 end
 
-Notify("Sentinel", "Verifying Key...", 2)
+if not ScriptName or ScriptName == "" then
+    LocalPlayer:Kick("Sentinel: Missing 'getgenv().Script' name.")
+    return
+end
 
--- 4. Authentication Logic
+Notify("Sentinel", "Authenticating...", 3)
+
+-- 4. Authentication Request (Sends Key + Script Name)
 local success, response = pcall(function()
     local requestFunc = (syn and syn.request) or (http and http.request) or (http_request) or (fluxus and fluxus.request) or request
     
+    local body = HttpService:JSONEncode({
+        key = UserKey,
+        script_name = ScriptName 
+    })
+
     if requestFunc then
         return requestFunc({
             Url = AUTH_URL,
             Method = "POST",
             Headers = { ["Content-Type"] = "application/json" },
-            Body = HttpService:JSONEncode({ key = UserKey })
+            Body = body
         })
     else
-        -- Fallback for weaker executors
         return {
-            Body = game:HttpPost(AUTH_URL, HttpService:JSONEncode({key = UserKey}), true)
+            Body = game:HttpPost(AUTH_URL, body, true)
         }
     end
 end)
@@ -50,44 +58,34 @@ end)
 -- 5. Handle Server Response
 if success and response then
     local data
-    local jsonSuccess, _ = pcall(function()
+    local parseSuccess, _ = pcall(function()
         data = HttpService:JSONDecode(response.Body)
     end)
 
-    if not jsonSuccess then
+    if not parseSuccess then
         Notify("Error", "Invalid server response.", 5)
         return
     end
 
     if data.success then
-        Notify("Sentinel", "Authenticated!", 3)
+        Notify("Sentinel", "Success! Loading Script...", 3)
         
-        -- 6. EXECUTE THE TARGET SCRIPT
-        if TargetScript then
+        -- 6. RUN THE CODE SENT BY SERVER
+        local scriptCode = data.script_code
+        if scriptCode and scriptCode ~= "" then
             local runSuccess, runError = pcall(function()
-                if type(TargetScript) == "string" then
-                    -- Check if it's a URL (starts with http) or raw Lua code
-                    if TargetScript:match("^http") then
-                        loadstring(game:HttpGet(TargetScript))()
-                    else
-                        loadstring(TargetScript)()
-                    end
-                elseif type(TargetScript) == "function" then
-                    TargetScript()
-                end
+                loadstring(scriptCode)()
             end)
             
             if not runSuccess then
-                warn("Sentinel: Error running target script: " .. tostring(runError))
-                Notify("Error", "Failed to load script (Check Console)", 5)
+                warn("Sentinel: Error running server code: " .. tostring(runError))
+                Notify("Error", "Script failed to run.", 5)
             end
         else
-            warn("Sentinel: Key valid, but 'getgenv().Script' was empty.")
-            Notify("Sentinel", "No script provided to load.", 5)
+            Notify("Error", "Server returned no code for '" .. tostring(ScriptName) .. "'", 5)
         end
     else
-        -- Kick user if key is invalid
-        LocalPlayer:Kick("Sentinel Auth: " .. (data.message or "Invalid Key"))
+        LocalPlayer:Kick("Sentinel: " .. (data.message or "Invalid Key or Script Name"))
     end
 else
     Notify("Error", "Server Connection Failed", 5)
