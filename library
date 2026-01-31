@@ -5,7 +5,7 @@ local LocalPlayer = Players.LocalPlayer
 -- ============================================
 -- CONFIGURATION
 -- ============================================
-local AUTH_URL = "https://YOUR-RENDER-URL.onrender.com/api/v1/verify"
+local AUTH_URL = "https://sentinel-auth.onrender.com/api/v1/verify"
 local GITHUB_SCRIPT_URL = "https://raw.githubusercontent.com/SynapseXRemakeOffical/Main/refs/heads/main/library"
 
 -- ============================================
