@@ -1,23 +1,33 @@
+-- ============================================
+-- ANTI-ENV LOGGER PROTECTION
+-- ============================================
+local RanTimes = 0
+local Connection = game:GetService("RunService").Heartbeat:Connect(function()
+    RanTimes += 1
+end)
+
+repeat
+    task.wait()
+until RanTimes >= 2
+
+Connection:Disconnect()
+
+-- ============================================
+-- SENTINEL LOADER v4.0
+-- ============================================
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
--- ============================================
--- CONFIGURATION
--- ============================================
-local AUTH_URL = "https://sentinel-auth.onrender.com/api/v1/verify"
-local GITHUB_SCRIPT_URL = "https://raw.githubusercontent.com/SynapseXRemakeOffical/Main/refs/heads/main/library"
+-- Configuration
+local AUTH_URL = "https://YOUR-RENDER-URL.onrender.com/api/v1/verify"
 
--- ============================================
--- GET VARIABLES FROM GETGENV
--- ============================================
+-- Get variables from getgenv
 local env = (getgenv and getgenv()) or _G
 local UserKey = env.Key
 local ScriptName = env.Script or "default"
 
--- ============================================
--- UI HELPER
--- ============================================
+-- UI Helper
 local function Notify(title, text, duration)
     pcall(function()
         game.StarterGui:SetCore("SendNotification", {
@@ -28,9 +38,7 @@ local function Notify(title, text, duration)
     end)
 end
 
--- ============================================
--- VALIDATION
--- ============================================
+-- Validation
 if not UserKey or UserKey == "" then
     LocalPlayer:Kick("❌ Sentinel: Missing License Key\n\nSet your key first:\ngetgenv().Key = \"YOUR-KEY-HERE\"")
     return
@@ -43,9 +51,7 @@ end
 
 Notify("Sentinel", "🔐 Authenticating...", 3)
 
--- ============================================
--- AUTHENTICATION REQUEST
--- ============================================
+-- Authentication Request
 local success, response = pcall(function()
     local requestFunc = (syn and syn.request) 
         or (http and http.request) 
@@ -69,7 +75,6 @@ local success, response = pcall(function()
             Body = body
         })
     else
-        -- Fallback for limited executors
         return {
             Body = game:HttpPost(AUTH_URL, body, true),
             StatusCode = 200
@@ -77,9 +82,7 @@ local success, response = pcall(function()
     end
 end)
 
--- ============================================
--- HANDLE SERVER RESPONSE
--- ============================================
+-- Handle Response
 if success and response then
     local data
     local parseSuccess = pcall(function()
@@ -95,7 +98,6 @@ if success and response then
     if data.success then
         Notify("Sentinel", "✅ Authenticated! Loading...", 3)
         
-        -- RUN THE SCRIPT CODE FROM SERVER
         local scriptCode = data.script_code
         
         if scriptCode and scriptCode ~= "" then
