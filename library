@@ -2,91 +2,124 @@ local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
--- Configuration
-local AUTH_URL = "https://sentinel-auth.onrender.com/verify"
+-- ============================================
+-- CONFIGURATION
+-- ============================================
+local AUTH_URL = "https://YOUR-RENDER-URL.onrender.com/api/v1/verify"
+local GITHUB_SCRIPT_URL = "https://raw.githubusercontent.com/SynapseXRemakeOffical/Main/refs/heads/main/library"
 
--- 1. GET VARIABLES FROM GETGENV
+-- ============================================
+-- GET VARIABLES FROM GETGENV
+-- ============================================
 local env = (getgenv and getgenv()) or _G
 local UserKey = env.Key
-local ScriptName = env.Script -- This is the NAME (e.g., "DaHood")
+local ScriptName = env.Script or "default"
 
--- 2. UI Helper
+-- ============================================
+-- UI HELPER
+-- ============================================
 local function Notify(title, text, duration)
-    game.StarterGui:SetCore("SendNotification", {
-        Title = Sentinel;
-        Text = loading;
-        Duration = duration or 5;
-    })
+    pcall(function()
+        game.StarterGui:SetCore("SendNotification", {
+            Title = title;
+            Text = text;
+            Duration = duration or 5;
+        })
+    end)
 end
 
--- 3. Validation
+-- ============================================
+-- VALIDATION
+-- ============================================
 if not UserKey or UserKey == "" then
-    LocalPlayer:Kick("Sentinel: Missing 'getgenv().Key'.")
+    LocalPlayer:Kick("❌ Sentinel: Missing License Key\n\nSet your key first:\ngetgenv().Key = \"YOUR-KEY-HERE\"")
     return
 end
 
 if not ScriptName or ScriptName == "" then
-    LocalPlayer:Kick("Sentinel: Missing 'getgenv().Script' name.")
+    LocalPlayer:Kick("❌ Sentinel: Missing Script Name\n\nSet script name:\ngetgenv().Script = \"default\"")
     return
 end
 
-Notify("Sentinel", "Authenticating...", 3)
+Notify("Sentinel", "🔐 Authenticating...", 3)
 
--- 4. Authentication Request (Sends Key + Script Name)
+-- ============================================
+-- AUTHENTICATION REQUEST
+-- ============================================
 local success, response = pcall(function()
-    local requestFunc = (syn and syn.request) or (http and http.request) or (http_request) or (fluxus and fluxus.request) or request
+    local requestFunc = (syn and syn.request) 
+        or (http and http.request) 
+        or (http_request) 
+        or (fluxus and fluxus.request) 
+        or request
     
     local body = HttpService:JSONEncode({
         key = UserKey,
-        script_name = ScriptName 
+        script_name = ScriptName
     })
 
     if requestFunc then
         return requestFunc({
             Url = AUTH_URL,
             Method = "POST",
-            Headers = { ["Content-Type"] = "application/json" },
+            Headers = { 
+                ["Content-Type"] = "application/json",
+                ["User-Agent"] = "Sentinel/4.0 Roblox"
+            },
             Body = body
         })
     else
+        -- Fallback for limited executors
         return {
-            Body = game:HttpPost(AUTH_URL, body, true)
+            Body = game:HttpPost(AUTH_URL, body, true),
+            StatusCode = 200
         }
     end
 end)
 
--- 5. Handle Server Response
+-- ============================================
+-- HANDLE SERVER RESPONSE
+-- ============================================
 if success and response then
     local data
-    local parseSuccess, _ = pcall(function()
+    local parseSuccess = pcall(function()
         data = HttpService:JSONDecode(response.Body)
     end)
 
     if not parseSuccess then
-        Notify("Error", "Invalid server response.", 5)
+        Notify("Error", "Invalid server response", 5)
+        LocalPlayer:Kick("❌ Sentinel: Invalid server response")
         return
     end
 
     if data.success then
-        Notify("Sentinel", "Success! Loading Script...", 3)
+        Notify("Sentinel", "✅ Authenticated! Loading...", 3)
         
-        -- 6. RUN THE CODE SENT BY SERVER
+        -- RUN THE SCRIPT CODE FROM SERVER
         local scriptCode = data.script_code
+        
         if scriptCode and scriptCode ~= "" then
             local runSuccess, runError = pcall(function()
                 loadstring(scriptCode)()
             end)
             
             if not runSuccess then
-                warn("Sentinel: Error running server code: " .. tostring(runError))
-                Notify("Error", "Script failed to run.", 5)
+                warn("[Sentinel] Script execution error: " .. tostring(runError))
+                Notify("Error", "Script failed to execute", 5)
+            else
+                print("[Sentinel] ✅ Script '" .. ScriptName .. "' loaded successfully")
+                Notify("Sentinel", "✅ Loaded: " .. ScriptName, 3)
             end
         else
-            Notify("Error", "Server returned no code for '" .. tostring(ScriptName) .. "'", 5)
+            Notify("Error", "No script found: " .. ScriptName, 5)
+            LocalPlayer:Kick("❌ Sentinel: No script found for '" .. ScriptName .. "'")
         end
     else
-        LocalPlayer:Kick("Sentinel: " .. (data.message or "Invalid Key or Script Name"))
+        local errorMsg = data.message or "Authentication failed"
+        Notify("Error", errorMsg, 5)
+        LocalPlayer:Kick("❌ Sentinel: " .. errorMsg)
     end
 else
-    Notify("Error", "Server Connection Failed", 5)
+    Notify("Error", "Connection failed", 5)
+    LocalPlayer:Kick("❌ Sentinel: Failed to connect to server\n\nCheck your internet connection")
 end
